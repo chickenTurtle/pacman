@@ -1,15 +1,19 @@
 from copy import deepcopy
 import functools
+from operator import ne
 import time
 import heapq
 import itertools
-from turtle import position
+import pygame
 
 class PriorityQueue:
     pq = []
     entry_finder = {}
     REMOVED = '<removed-task>'
     counter = itertools.count()
+
+    def __repr__(self) -> str:
+        return str(self.pq) + str(self.entry_finder)
 
     def add_task(self, task, priority=0):
         if task in self.entry_finder:
@@ -30,6 +34,27 @@ class PriorityQueue:
                 del self.entry_finder[task]
                 return task
         return None
+
+
+class MovableObject(pygame.sprite.Sprite):
+    def __init__(self, pos: tuple = (0,0)) -> None:
+        self.speed = 1
+        self.position = pos
+        self.position_frac = .0
+        self.direction = (1,0)
+        self.next_direction = (0,0)
+
+    def move(self):
+        x = self.position[0]+self.speed*self.direction[0]
+        y = self.position[1]+self.speed*self.direction[1]
+        self.position = (int(x), int(y))
+        self.position_frac = x % 1 + y % 1
+
+
+class Pacman(MovableObject):
+    def __init__(self, pos: tuple = (0, 0)) -> None:
+        super().__init__(pos)
+        self.image = pygame.image.load("pacman.png")
 
 class Map:
     map: list[list] = None
@@ -61,18 +86,15 @@ class Map:
         
         print(s)
     
+    def get_neighbours(self, x, y):
+        moves = [(1,0), (0,1), (-1,0), (0,-1)]
+        return [(x+a, y+b) for a, b in moves if 0 <= x+a < len(self.map[0]) and 0 <= y+b < len(self.map) and self.map[y+b][x+a] == 1]
+    
     @functools.lru_cache(maxsize=10000)
     def dijkstra(self, src: tuple, dest: tuple):
-        
-        def get_neighbours(x, y):
-            moves = [(1,0), (0,1), (-1,0), (0,-1)]
-            return [(x+a, y+b) for a, b in moves if 0 <= x+a < len(self.map[0]) and 0 <= y+b < len(self.map) and self.map[y+b][x+a] == 1]
-            
-        pq = PriorityQueue()
+        not_visited = PriorityQueue()
         dist = dict()
         prev = dict()
-        not_visited = set()
-        
         dist[src] = 0
 
         # init pq, not_visisted, dist and prev
@@ -82,22 +104,18 @@ class Map:
                     if (x, y) != src:
                         dist[(x,y)] = 1000000
                         prev[(x,y)] = None
-                    pq.add_task((x,y), dist[(x,y)]) # add to pq
-                    not_visited.add((x,y))
-
+                    not_visited.add_task((x,y), dist[(x,y)])
+        
         # finding shortest paths
-        next = pq.pop_task()
+        next = not_visited.pop_task()
         while next:
-            not_visited.remove(next)
-            for neighbour in get_neighbours(next[0], next[1]):
-                if neighbour in not_visited:
-                    alt_dist = dist[next] + 1
-                    if alt_dist < dist[neighbour]:
-                        pq.remove_task(neighbour)
-                        dist[neighbour] = alt_dist
-                        prev[neighbour] = next
-                        pq.add_task(neighbour, alt_dist)
-            next = pq.pop_task()
+            for neighbour in self.get_neighbours(next[0], next[1]):
+                alt_dist = dist[next] + 1
+                if alt_dist < dist[neighbour]:
+                    dist[neighbour] = alt_dist
+                    prev[neighbour] = next
+                    not_visited.add_task(neighbour, alt_dist)
+            next = not_visited.pop_task()
 
         # getting shortest path
         path = []
@@ -110,10 +128,47 @@ class Map:
         return path
 
 
+class App:
+    def __init__(self):
+        self._running = True
+        self._display_surf = None
+        self.size = self.weight, self.height = 1920/2, 1080/2
+ 
+    def on_init(self):
+        pygame.init()
+        self._display_surf = pygame.display.set_mode(self.size, pygame.HWSURFACE | pygame.DOUBLEBUF)
+        self._running = True
+ 
+    def on_event(self, event):
+        if event.type == pygame.QUIT:
+            self._running = False
+        
+    def on_loop(self):
+        pass
+    
+    def on_render(self):
+        pass
+    
+    def on_cleanup(self):
+        pygame.quit()
+ 
+    def on_execute(self):
+        if self.on_init() == False:
+            self._running = False
+ 
+        while(self._running):
+            for event in pygame.event.get():
+                self.on_event(event)
+            self.on_loop()
+            self.on_render()
+        self.on_cleanup()
+ 
 if __name__ == "__main__":
     m = Map()
-    print(m)
     t = time.time()
     path = m.dijkstra((2,1), (20,10))
-    print(path, "\nin: ", time.time()-t)
+    print(path)
+    print(time.time()-t)
     m.print_path(path)
+    #game = App()
+    #game.on_execute()
