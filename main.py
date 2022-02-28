@@ -59,9 +59,11 @@ class Pacman(MovableObject):
 class Map:
     map: list[list] = None
     parse = {'+': 0, '-': 1, 0: '+', 1: ' ', '*': '*'}
+    paths = dict()
 
     def __init__(self) -> None:
         self.map = self.read_map()
+        self.calculate_paths()
 
     def read_map(self) -> list:
         return [[self.parse[x] for x in l.strip()] for l in open("map.txt").readlines()]
@@ -85,13 +87,18 @@ class Map:
             s += "\n"
         
         print(s)
+
+    def calculate_paths(self) -> None:
+        for y, row in enumerate(self.map):
+            for x, cell in enumerate(row):
+                if cell == 1:
+                    self.paths[(x,y)] = self.dijkstra((x, y))
     
     def get_neighbours(self, x, y):
         moves = [(1,0), (0,1), (-1,0), (0,-1)]
         return [(x+a, y+b) for a, b in moves if 0 <= x+a < len(self.map[0]) and 0 <= y+b < len(self.map) and self.map[y+b][x+a] == 1]
     
-    @functools.lru_cache(maxsize=10000)
-    def dijkstra(self, src: tuple, dest: tuple):
+    def dijkstra(self, src: tuple):
         not_visited = PriorityQueue()
         dist = dict()
         prev = dict()
@@ -116,9 +123,13 @@ class Map:
                     prev[neighbour] = next
                     not_visited.add_task(neighbour, alt_dist)
             next = not_visited.pop_task()
-
-        # getting shortest path
+        
+        return prev
+    
+    @functools.lru_cache(maxsize=10000)
+    def get_path(self, src: tuple, dest: tuple):
         path = []
+        prev = self.paths[src]
         while True:
             path.append(dest)
             if not prev.get(dest):
@@ -126,7 +137,6 @@ class Map:
             dest = prev[dest]
         path.reverse()
         return path
-
 
 class App:
     def __init__(self):
@@ -165,10 +175,7 @@ class App:
  
 if __name__ == "__main__":
     m = Map()
-    t = time.time()
-    path = m.dijkstra((2,1), (20,10))
-    print(path)
-    print(time.time()-t)
+    path = m.get_path((2,1), (20,10))
     m.print_path(path)
     #game = App()
     #game.on_execute()
